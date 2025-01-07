@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const fileId = await uploadToTelegram(file)
+    const fileId = await uploadToTelegram(file,'video.mp4')
     return NextResponse.json({ message: 'File uploaded successfully to Telegram', fileId })
   } catch (error) {
     console.error('Error uploading file to Telegram:', error)

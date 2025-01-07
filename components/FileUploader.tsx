@@ -14,7 +14,7 @@ export default function FileUploader() {
 
     for (const file of acceptedFiles) {
       try {
-        await uploadToTelegram(file, (progress) => {
+        await uploadToTelegram(file, file.name, undefined, (progress: number) => {
           setUploadProgress(progress)
         })
       } catch (error) {

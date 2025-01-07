@@ -93,7 +93,7 @@ export default function VideoRecorder() {
       setIsUploading(true)
       setUploadProgress(0)
       try {
-        const fileId = await uploadToTelegram(recordedBlob, '', (progress) => {
+        const fileId = await uploadToTelegram(recordedBlob, `video_${Date.now()}.webm`, undefined, (progress: number) => {
           setUploadProgress(progress)
         });
         console.log('Video uploaded to Telegram, file ID:', fileId);

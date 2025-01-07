@@ -29,7 +29,7 @@ export async function uploadToTelegram(
   onProgress?: (progress: number) => void
 ): Promise<TelegramFile> {
   const formData = new FormData()
-  formData.append('chat_id', TELEGRAM_CHAT_ID)
+  formData.append('chat_id', TELEGRAM_CHAT_ID as any)
   formData.append('document', file, fileName)
   if (parentId) {
     formData.append('caption', `parent:${parentId}`)
