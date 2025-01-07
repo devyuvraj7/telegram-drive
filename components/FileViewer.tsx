@@ -39,6 +39,7 @@ export default function FileViewer() {
       setIsLoading(true)
       setError(null)
       const fetchedItems = await getFiles(folderId)
+      console.log("fetced-->",fetchedItems)
       setItems(fetchedItems)
     } catch (error) {
       console.error('Error fetching items:', error)

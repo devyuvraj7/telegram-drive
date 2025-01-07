@@ -126,8 +126,9 @@ export async function createFolder(name: string, parentId?: string): Promise<Tel
   }
 }
 
-export async function getFiles(parentId?: string): Promise<(TelegramFile | TelegramFolder)[]> {
+export async function getFiles(parentId) {
   try {
+    console.log('Getting files and folders from Telegram...');
     const response = await axios.get(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`,
       {
@@ -136,13 +137,15 @@ export async function getFiles(parentId?: string): Promise<(TelegramFile | Teleg
           limit: 100,
         }
       }
-    )
+    );
 
     if (response.data.ok) {
+      console.log("response", response.data);
       const items = await Promise.all(response.data.result
-        .filter((update: any) => update.message && (update.message.document || update.message.text))
-        .map(async (update: any) => {
+        .filter(update => update.message && (update.message.document || update.message.text || update.message.photo))
+        .map(async (update) => {
           const message = update.message;
+          
           if (message.document) {
             const file = message.document;
             const fileUrl = await getFileUrl(file.file_id);
@@ -160,6 +163,26 @@ export async function getFiles(parentId?: string): Promise<(TelegramFile | Teleg
               name: file.file_name || `file_${file.file_id}`,
               preview: file.thumb ? await getFileUrl(file.thumb.file_id) : undefined,
               parentId: fileParentId,
+            };
+          } else if (message.photo) {
+            const largestPhoto = message.photo[message.photo.length - 1];
+            const fileUrl = await getFileUrl(largestPhoto.file_id);
+            const caption = message.caption || '';
+            const fileParentId = caption.startsWith('parent:') ? caption.split(':')[1] : undefined;
+            
+            if (parentId && fileParentId !== parentId) {
+              return null;
+            }
+
+            return {
+              id: largestPhoto.file_id,
+              url: fileUrl,
+              type: 'image/jpeg',
+              name: `photo_${largestPhoto.file_id}.jpg`,
+              preview: fileUrl,
+              parentId: fileParentId,
+              width: largestPhoto.width,
+              height: largestPhoto.height,
             };
           } else if (message.text && message.text.startsWith('folder:')) {
             const [, folderName, folderParentId] = message.text.split(':');
@@ -179,15 +202,14 @@ export async function getFiles(parentId?: string): Promise<(TelegramFile | Teleg
 
       return items.filter(Boolean);
     } else {
-      throw new Error(response.data.description || 'Failed to get files and folders from Telegram')
+      throw new Error(response.data.description || 'Failed to get files and folders from Telegram');
     }
   } catch (error) {
-    if (error instanceof AxiosError) {
-      console.error('Axios error:', error.response?.data || error.message)
-      throw new Error(`Failed to get files and folders: ${error.response?.data?.description || error.message}`)
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error:', error.response?.data || error.message);
+      throw new Error(`Failed to get files and folders: ${error.response?.data?.description || error.message}`);
     }
-    console.error('Error getting files and folders:', error)
-    throw new Error('An unexpected error occurred while fetching files and folders')
+    console.error('Error getting files and folders:', error);
+    throw new Error('An unexpected error occurred while fetching files and folders');
   }
 }
-

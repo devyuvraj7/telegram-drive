@@ -24,7 +24,7 @@ export default function Home() {
       <div className="w-full max-w-4xl">
         <MediaUploader onFileUploaded={handleFileUploaded} currentFolder={currentFolder} />
         <div className="mt-12">
-          {/* <FileViewer key={refreshTrigger} onFolderChange={handleFolderChange} /> */}
+          <FileViewer key={refreshTrigger}  />
         </div>
       </div>
     </main>
