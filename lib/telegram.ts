@@ -126,7 +126,7 @@ export async function createFolder(name: string, parentId?: string): Promise<Tel
   }
 }
 
-export async function getFiles(parentId) {
+export async function getFiles(parentId:any) {
   try {
     console.log('Getting files and folders from Telegram...');
     const response = await axios.get(
@@ -142,8 +142,8 @@ export async function getFiles(parentId) {
     if (response.data.ok) {
       console.log("response", response.data);
       const items = await Promise.all(response.data.result
-        .filter(update => update.message && (update.message.document || update.message.text || update.message.photo))
-        .map(async (update) => {
+        .filter((update:any) => update.message && (update.message.document || update.message.text || update.message.photo))
+        .map(async (update:any) => {
           const message = update.message;
           
           if (message.document) {
