@@ -241,36 +241,6 @@ export default function MediaUploader({ onFileUploaded, currentFolder }: MediaUp
             </div>
           )}
           {activeTab === 'record' && (
-            // <div className="mt-4">
-            //   <div className="aspect-video bg-gray-200 rounded-lg overflow-hidden mb-4">
-            //     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-            //   </div>
-            //   <div className="flex justify-center mb-4">
-            //     {!isRecording && !recordedBlob && (
-            //       <Button onClick={startRecording} disabled={isUploading} className="w-full sm:w-auto">
-            //         <Camera className="mr-2 h-4 w-4" /> Start Recording
-            //       </Button>
-            //     )}
-            //     {isRecording && (
-            //       <Button onClick={stopRecording} variant="destructive" className="w-full sm:w-auto">
-            //         Stop Recording ({formatTime(recordingTime)})
-            //       </Button>
-            //     )}
-            //     {recordedBlob && (
-            //       <Button onClick={handleUpload} disabled={isUploading} className="w-full sm:w-auto">
-            //         {isUploading ? (
-            //           <>
-            //             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...
-            //           </>
-            //         ) : (
-            //           <>
-            //             <Upload className="mr-2 h-4 w-4" /> Upload Recording
-            //           </>
-            //         )}
-            //       </Button>
-            //     )}
-            //   </div>
-            // </div>
             <VideoRecorder/>
           )}
           {activeTab === 'create-folder' && (

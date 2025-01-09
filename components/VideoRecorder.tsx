@@ -25,6 +25,8 @@ export default function VideoRecorder() {
 
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false)
+  const chunksRef = useRef<Blob[]>([])
 
   const getAvailableDevices = useCallback(async () => {
     try {
@@ -68,40 +70,26 @@ export default function VideoRecorder() {
 
   const startRecording = useCallback(async () => {
     try {
-      const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
-        audio: true
-      }
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
-      const hasAudioTrack = stream.getAudioTracks().length > 0;
-      const hasVideoTrack = stream.getVideoTracks().length > 0;
-      if (!hasAudioTrack || !hasVideoTrack) {
-        throw new Error(`Missing ${!hasAudioTrack ? 'audio' : 'video'} track`);
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.muted = true // Mute to prevent feedback
-      }
-
+      await setupMediaStream()
+      
       const options = { mimeType: 'video/webm;codecs=vp8,opus' }
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
         console.warn(`${options.mimeType} is not supported, using default codec`)
       }
 
-      const mediaRecorder = new MediaRecorder(stream, options)
+      const mediaRecorder = new MediaRecorder(streamRef.current!, options)
       mediaRecorderRef.current = mediaRecorder
 
-      const chunks: Blob[] = []
+      chunksRef.current = []
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          chunks.push(event.data)
+          chunksRef.current.push(event.data)
         }
       }
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'video/webm' })
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' })
         setRecordedBlob(blob)
 
         console.log('Recorded Blob:', blob);
@@ -109,7 +97,7 @@ export default function VideoRecorder() {
         console.log('Blob size:', blob.size);
 
         // Stop all tracks
-        stream.getTracks().forEach(track => track.stop())
+        streamRef.current?.getTracks().forEach(track => track.stop())
       }
 
       mediaRecorder.start(1000) // Collect data every second
@@ -123,7 +111,7 @@ export default function VideoRecorder() {
       console.error('Error starting recording:', error)
       setPermissionError('Failed to start recording. Please check your camera and microphone permissions.')
     }
-  }, [selectedDeviceId])
+  }, [])
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -131,6 +119,9 @@ export default function VideoRecorder() {
     }
     if (timerRef.current) {
       clearInterval(timerRef.current)
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
     }
     setIsRecording(false)
   }, [])
@@ -161,25 +152,74 @@ export default function VideoRecorder() {
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  const switchCamera = useCallback(() => {
-    const currentIndex = devices.findIndex(device => device.deviceId === selectedDeviceId);
-    const nextIndex = (currentIndex + 1) % devices.length;
-    setSelectedDeviceId(devices[nextIndex].deviceId);
-  }, [devices, selectedDeviceId]);
+  const switchCamera = useCallback(async () => {
+    if (devices.length < 2) return
+
+    setIsSwitchingCamera(true)
+    const currentIndex = devices.findIndex(device => device.deviceId === selectedDeviceId)
+    const nextIndex = (currentIndex + 1) % devices.length
+    const nextDeviceId = devices[nextIndex].deviceId
+
+    try {
+      if (isRecording) {
+        // Pause current recording
+        mediaRecorderRef.current?.pause()
+      }
+
+      // Setup new media stream
+      setSelectedDeviceId(nextDeviceId)
+      await setupMediaStream()
+
+      if (isRecording) {
+        // Resume recording with new stream
+        mediaRecorderRef.current?.resume()
+      }
+    } catch (error) {
+      console.error('Error switching camera:', error)
+      setPermissionError('Failed to switch camera. Please try again.')
+    } finally {
+      setIsSwitchingCamera(false)
+    }
+  }, [devices, selectedDeviceId, isRecording])
+
+  const setupMediaStream = async () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+    }
+
+    const constraints: MediaStreamConstraints = {
+      video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
+      audio: true
+    }
+    const stream = await navigator.mediaDevices.getUserMedia(constraints)
+    streamRef.current = stream
+    const hasAudioTrack = stream.getAudioTracks().length > 0;
+    const hasVideoTrack = stream.getVideoTracks().length > 0;
+    if (!hasAudioTrack || !hasVideoTrack) {
+      throw new Error(`Missing ${!hasAudioTrack ? 'audio' : 'video'} track`);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      videoRef.current.muted = true // Mute to prevent feedback
+    }
+
+    return stream
+  }
+
 
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="flex flex-col items-center w-full max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg"
+      className="flex flex-col items-center w-full max-w-md mx-auto p-4 bg-white rounded-lg shadow-lg"
     >
       {!hasPermission ? (
         <Dialog>
           <DialogTrigger asChild>
             <Button>Request Camera Permission</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Camera Permission Required</DialogTitle>
               <DialogDescription>
@@ -191,9 +231,9 @@ export default function VideoRecorder() {
         </Dialog>
       ) : (
         <>
-          <div className="flex justify-between w-full mb-4">
+          <div className="flex flex-col sm:flex-row justify-between w-full mb-4 gap-2">
             <Select value={selectedDeviceId || undefined} onValueChange={setSelectedDeviceId}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="Select a camera" />
               </SelectTrigger>
               <SelectContent>
@@ -204,7 +244,7 @@ export default function VideoRecorder() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={switchCamera} disabled={devices.length < 2}>
+            <Button onClick={switchCamera} disabled={devices.length < 2 || isSwitchingCamera} className="w-full sm:w-auto">
               <SwitchCamera className="mr-2 h-4 w-4" /> Switch Camera
             </Button>
           </div>
@@ -228,7 +268,7 @@ export default function VideoRecorder() {
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Button onClick={startRecording} disabled={!selectedDeviceId}>
+                  <Button onClick={startRecording} disabled={!selectedDeviceId} className="w-full">
                     <Camera className="mr-2 h-4 w-4" /> Start Recording
                   </Button>
                 </motion.div>
@@ -245,6 +285,7 @@ export default function VideoRecorder() {
                     onClick={stopRecording} 
                     variant="destructive" 
                     disabled={recordingTime < MIN_RECORDING_TIME}
+                    className="w-full"
                   >
                     <CameraOff className="mr-2 h-4 w-4" /> Stop Recording {recordingTime < MIN_RECORDING_TIME && `(${MIN_RECORDING_TIME - recordingTime}s)`}
                   </Button>
@@ -258,7 +299,7 @@ export default function VideoRecorder() {
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Button onClick={handleUpload} disabled={isUploading}>
+                  <Button onClick={handleUpload} disabled={isUploading} className="w-full">
                     {isUploading ? 'Uploading...' : 'Upload Recording'}
                   </Button>
                 </motion.div>
@@ -295,7 +336,7 @@ export default function VideoRecorder() {
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-4"
+              className="mt-4 text-center"
             >
               Recording complete ({formatTime(recordingTime)}). Click "Upload Recording" to save.
             </motion.p>
