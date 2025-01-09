@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { uploadToTelegram } from '@/lib/telegram'
-import { AlertCircle, ArrowLeft, Camera, CameraOff, Moon, Play, Settings, Sun, SwitchCamera, Upload } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Camera, CameraOff, Moon, Play, Pause, RotateCcw, Settings, Sun, SwitchCamera, Upload } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
 
 export default function VideoRecorder() {
-  // Core states
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -25,12 +25,11 @@ export default function VideoRecorder() {
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
-  const [videoQuality, setVideoQuality] = useState<'high' | 'medium' | 'low'>('high')
+  const [videoQuality, setVideoQuality] = useState<'high' | 'medium' | 'low'>('medium')
   const [showUploadButton, setShowUploadButton] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [isPreviewMode, setIsPreviewMode] = useState(false)
 
-  // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -38,7 +37,8 @@ export default function VideoRecorder() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  // Constants
+  const { toast } = useToast()
+
   const MIN_RECORDING_TIME = 3
   const SUPPORTED_MIME_TYPES = [
     'video/webm;codecs=vp9,opus',
@@ -76,7 +76,6 @@ export default function VideoRecorder() {
 
   const setupMediaStream = async () => {
     try {
-      // Stop existing stream if any
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
       }
@@ -91,10 +90,9 @@ export default function VideoRecorder() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play().catch(console.error)
+        await videoRef.current.play()
       }
 
-      // If we're recording, setup new MediaRecorder
       if (isRecording) {
         await setupMediaRecorder(stream)
       }
@@ -103,6 +101,11 @@ export default function VideoRecorder() {
     } catch (error) {
       console.error('Error setting up media stream:', error)
       setPermissionError('Failed to setup camera. Please check permissions and try again.')
+      toast({
+        title: "Camera Error",
+        description: "Failed to setup camera. Please check permissions and try again.",
+        variant: "destructive",
+      })
       throw error
     }
   }
@@ -128,6 +131,11 @@ export default function VideoRecorder() {
       console.error('MediaRecorder error:', event)
       stopRecording()
       setPermissionError('Recording error occurred. Please try again.')
+      toast({
+        title: "Recording Error",
+        description: "An error occurred during recording. Please try again.",
+        variant: "destructive",
+      })
     }
 
     newMediaRecorder.onstop = () => {
@@ -159,6 +167,11 @@ export default function VideoRecorder() {
     } catch (error) {
       console.error('Error starting recording:', error)
       setPermissionError('Failed to start recording. Please check your camera and microphone permissions.')
+      toast({
+        title: "Recording Error",
+        description: "Failed to start recording. Please check your camera and microphone permissions.",
+        variant: "destructive",
+      })
     }
   }, [])
 
@@ -200,21 +213,23 @@ export default function VideoRecorder() {
       const newFacingMode = facingMode === 'user' ? 'environment' : 'user'
       setFacingMode(newFacingMode)
       
-      // Stop current MediaRecorder if it's active
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop()
       }
 
       await setupMediaStream()
 
-      // Resume recording if it was active before
       if (isRecording) {
         await setupMediaRecorder(streamRef.current!)
       }
     } catch (error) {
       console.error('Error switching camera:', error)
       setPermissionError('Failed to switch camera. Please try again.')
-      // Try to recover by switching back
+      toast({
+        title: "Camera Switch Error",
+        description: "Failed to switch camera. Please try again.",
+        variant: "destructive",
+      })
       setFacingMode(facingMode)
       await setupMediaStream().catch(console.error)
     } finally {
@@ -238,12 +253,22 @@ export default function VideoRecorder() {
         }
       )
       console.log('Video uploaded to Telegram, file ID:', fileId)
+      toast({
+        title: "Upload Successful",
+        description: "Your video has been uploaded successfully.",
+        variant: "default",
+      })
       setRecordedBlobs([])
       setRecordingTime(0)
       setShowUploadButton(false)
     } catch (error) {
       console.error('Error uploading to Telegram:', error)
       setPermissionError('Failed to upload video. Please try again.')
+      toast({
+        title: "Upload Error",
+        description: "Failed to upload video. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
@@ -319,12 +344,13 @@ export default function VideoRecorder() {
             <video
               ref={previewVideoRef}
               controls
+              playsInline
               className="absolute inset-0 w-full h-full object-contain bg-black"
             />
           )}
           
           {/* Quality selector */}
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 right-4 z-10">
             <Select value={videoQuality} onValueChange={(value: 'high' | 'medium' | 'low') => setVideoQuality(value)}>
               <SelectTrigger className="w-[100px] bg-white/50 dark:bg-black/50 text-gray-900 dark:text-white border-0">
                 <SelectValue placeholder="Quality" />
@@ -339,7 +365,7 @@ export default function VideoRecorder() {
 
           {/* Recording indicator */}
           {isRecording && (
-            <div className="absolute top-4 left-4 flex items-center space-x-2">
+            <div className="absolute top-4 left-4 flex items-center space-x-2 z-10">
               <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
               <span className="text-white text-sm font-medium">
                 {formatTime(recordingTime)}
@@ -352,9 +378,9 @@ export default function VideoRecorder() {
           <div className="flex justify-between items-center">
             <Button
               variant="outline"
-              size="lg"
+              size="icon"
               onClick={() => window.history.back()}
-              className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
               <ArrowLeft className="h-6 w-6" />
             </Button>
@@ -362,12 +388,12 @@ export default function VideoRecorder() {
             <div className="flex space-x-4">
               {!isRecording && !showUploadButton && (
                 <Button
-                  size="lg"
+                  size="icon"
                   onClick={startRecording}
                   disabled={isUploading}
-                  className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white"
+                  className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white"
                 >
-                  <Camera className="h-6 w-6" />
+                  <Camera className="h-8 w-8" />
                 </Button>
               )}
 
@@ -376,31 +402,31 @@ export default function VideoRecorder() {
                   {!isPaused ? (
                     <Button
                       variant="outline"
-                      size="lg"
+                      size="icon"
                       onClick={pauseRecording}
-                      className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      className="w-16 h-16 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     >
-                      <span className="h-6 w-6 block bg-gray-900 dark:bg-white" />
+                      <Pause className="h-8 w-8" />
                     </Button>
                   ) : (
                     <Button
                       variant="outline"
-                      size="lg"
+                      size="icon"
                       onClick={resumeRecording}
-                      className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      className="w-16 h-16 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     >
-                      <Camera className="h-6 w-6" />
+                      <Play className="h-8 w-8" />
                     </Button>
                   )}
 
                   <Button
                     variant="destructive"
-                    size="lg"
+                    size="icon"
                     onClick={stopRecording}
                     disabled={recordingTime < MIN_RECORDING_TIME}
-                    className="w-14 h-14 rounded-full"
+                    className="w-16 h-16 rounded-full"
                   >
-                    <CameraOff className="h-6 w-6" />
+                    <CameraOff className="h-8 w-8" />
                   </Button>
                 </>
               )}
@@ -408,19 +434,19 @@ export default function VideoRecorder() {
               {showUploadButton && !isRecording && (
                 <>
                   <Button
-                    size="lg"
+                    size="icon"
                     onClick={previewRecording}
-                    className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 text-white"
+                    className="w-16 h-16 rounded-full bg-blue-500 hover:bg-blue-600 text-white"
                   >
-                    <Play className="h-6 w-6" />
+                    <Play className="h-8 w-8" />
                   </Button>
                   <Button
-                    size="lg"
+                    size="icon"
                     onClick={handleUpload}
                     disabled={isUploading}
-                    className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                    className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white"
                   >
-                    <Upload className="h-6 w-6" />
+                    <Upload className="h-8 w-8" />
                   </Button>
                 </>
               )}
@@ -428,12 +454,12 @@ export default function VideoRecorder() {
 
             <Button
               variant="outline"
-              size="lg"
+              size="icon"
               onClick={isPreviewMode ? () => setIsPreviewMode(false) : switchCamera}
               disabled={isSwitchingCamera || isUploading || isRecording}
-              className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
-              {isPreviewMode ? <ArrowLeft className="h-6 w-6" /> : <SwitchCamera className="h-6 w-6" />}
+              {isPreviewMode ? <RotateCcw className="h-6 w-6" /> : <SwitchCamera className="h-6 w-6" />}
             </Button>
           </div>
 
