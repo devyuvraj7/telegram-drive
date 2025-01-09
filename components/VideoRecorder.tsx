@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { uploadToTelegram } from '@/lib/telegram'
-import { AlertCircle, Camera, CameraOff, Moon, Settings, Sun, SwitchCamera, Upload } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Camera, CameraOff, Moon, Play, Settings, Sun, SwitchCamera, Upload } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -28,11 +28,13 @@ export default function VideoRecorder() {
   const [videoQuality, setVideoQuality] = useState<'high' | 'medium' | 'low'>('high')
   const [showUploadButton, setShowUploadButton] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
 
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
@@ -198,8 +200,8 @@ export default function VideoRecorder() {
       const newFacingMode = facingMode === 'user' ? 'environment' : 'user'
       setFacingMode(newFacingMode)
       
-      // Pause current recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      // Stop current MediaRecorder if it's active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop()
       }
 
@@ -259,6 +261,20 @@ export default function VideoRecorder() {
     document.documentElement.classList.toggle('dark')
   }
 
+  const previewRecording = () => {
+    if (recordedBlobs.length === 0) return
+
+    const finalBlob = new Blob(recordedBlobs, { type: getPreferredMimeType() })
+    const videoURL = URL.createObjectURL(finalBlob)
+
+    if (previewVideoRef.current) {
+      previewVideoRef.current.src = videoURL
+      previewVideoRef.current.play().catch(console.error)
+    }
+
+    setIsPreviewMode(true)
+  }
+
   useEffect(() => {
     const initializeCamera = async () => {
       try {
@@ -291,13 +307,21 @@ export default function VideoRecorder() {
         className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
       >
         <div className="flex-1 relative">
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            playsInline 
-            muted 
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+          {!isPreviewMode ? (
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <video
+              ref={previewVideoRef}
+              controls
+              className="absolute inset-0 w-full h-full object-contain bg-black"
+            />
+          )}
           
           {/* Quality selector */}
           <div className="absolute top-4 right-4">
@@ -329,11 +353,10 @@ export default function VideoRecorder() {
             <Button
               variant="outline"
               size="lg"
-              onClick={switchCamera}
-              disabled={isSwitchingCamera || isUploading}
+              onClick={() => window.history.back()}
               className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
-              <SwitchCamera className="h-6 w-6" />
+              <ArrowLeft className="h-6 w-6" />
             </Button>
 
             <div className="flex space-x-4">
@@ -383,24 +406,34 @@ export default function VideoRecorder() {
               )}
 
               {showUploadButton && !isRecording && (
-                <Button
-                  size="lg"
-                  onClick={handleUpload}
-                  disabled={isUploading}
-                  className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white"
-                >
-                  <Upload className="h-6 w-6" />
-                </Button>
+                <>
+                  <Button
+                    size="lg"
+                    onClick={previewRecording}
+                    className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    <Play className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    <Upload className="h-6 w-6" />
+                  </Button>
+                </>
               )}
             </div>
 
             <Button
               variant="outline"
               size="lg"
-              onClick={toggleDarkMode}
+              onClick={isPreviewMode ? () => setIsPreviewMode(false) : switchCamera}
+              disabled={isSwitchingCamera || isUploading || isRecording}
               className="w-14 h-14 rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
-              {isDarkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+              {isPreviewMode ? <ArrowLeft className="h-6 w-6" /> : <SwitchCamera className="h-6 w-6" />}
             </Button>
           </div>
 
